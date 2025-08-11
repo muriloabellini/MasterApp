@@ -14,6 +14,7 @@ import { Clock, MessageSquare, Menu } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import SideMenu from '@/components/SideMenu';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/hooks/useNotifications';
 import axios from 'axios';
 import { router } from 'expo-router';
 
@@ -44,6 +45,7 @@ interface Configuracao {
 export default function NotificacoesScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
+  const { configureSummaryNotifications, hasPermission, requestPermissions } = useNotifications();
   const [menuVisible, setMenuVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -155,6 +157,19 @@ export default function NotificacoesScreen() {
         return;
       }
 
+      // Verifica se tem permissão para notificações
+      if (!hasPermission) {
+        const granted = await requestPermissions();
+        if (!granted) {
+          Alert.alert(
+            'Permissão Necessária',
+            'Para receber notificações, é necessário conceder permissão nas configurações do dispositivo.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+
       setSaving(true);
 
       // Prepara o payload com id=0 quando for nova configuração
@@ -184,9 +199,23 @@ export default function NotificacoesScreen() {
       console.log('Resposta do servidor:', response.data);
 
       if (response.data.success) {
+        // Configura as notificações locais
+        try {
+          await configureSummaryNotifications({
+            resumo_8: horarios.h8,
+            resumo_12: horarios.h12,
+            resumo_18: horarios.h18,
+            resumo_23: horarios.h23,
+            modelo: parseInt(tipoTexto) as 1 | 2 | 3,
+          });
+        } catch (notificationError) {
+          console.error('Erro ao configurar notificações locais:', notificationError);
+          // Não bloqueia o salvamento se houver erro nas notificações
+        }
+
         Alert.alert(
           'Sucesso',
-          response.data.message || 'Configurações salvas com sucesso!',
+          response.data.message || 'Configurações salvas com sucesso! As notificações foram configuradas.',
           [{ text: 'OK', onPress: () => fetchConfigurations() }]
         );
       } else {

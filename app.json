@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icone.png",
+      "image": "./assets/images/logoWhite.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },

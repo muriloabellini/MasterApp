@@ -4,11 +4,10 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const BACKGROUND_NOTIFICATION_TASK = 'background-notification-task';
+export const BACKGROUND_NOTIFICATION_TASK = 'background-notification-task';
 
 // Configuração inicial do Expo Notifications
 export async function setupNotificationHandler() {
-  // Configura como as notificações serão tratadas
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -17,7 +16,6 @@ export async function setupNotificationHandler() {
     }),
   });
 
-  // Configuração específica para Android
   if (Platform.OS === 'android') {
     const channelId = 'default';
     const existingChannels = await Notifications.getNotificationChannelsAsync();
@@ -33,11 +31,9 @@ export async function setupNotificationHandler() {
     }
   }
 
-  // Solicita permissões
   await requestNotificationPermissions();
 }
 
-// Solicita permissões para notificações
 export async function requestNotificationPermissions() {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -55,7 +51,6 @@ export async function requestNotificationPermissions() {
   return true;
 }
 
-// Interface para dados de transação
 interface TransactionData {
   id: number;
   tipo: string;
@@ -67,14 +62,22 @@ interface TransactionData {
   criada_em: string;
 }
 
-// Interface para resposta da API
 interface NotificationResponse {
   success: boolean;
   data: TransactionData[];
   count: number;
 }
 
-// Formata valor em centavos para reais
+interface SummaryData {
+  quantidade_transacoes: number;
+  valor_total: number;
+}
+
+interface SummaryResponse {
+  success: boolean;
+  data: SummaryData;
+}
+
 function formatCurrency(valueInCents: number): string {
   const valueInReais = valueInCents / 100;
   return valueInReais.toLocaleString('pt-BR', {
@@ -83,7 +86,6 @@ function formatCurrency(valueInCents: number): string {
   });
 }
 
-// Gera mensagem baseada no status e método de pagamento
 function generateTransactionMessage(transaction: TransactionData): { title: string; body: string } {
   const valor = formatCurrency(transaction.valor);
   
@@ -106,7 +108,6 @@ function generateTransactionMessage(transaction: TransactionData): { title: stri
   }
 }
 
-// Exibe notificação local para transação
 export async function showTransactionNotification(transaction: TransactionData) {
   const { title, body } = generateTransactionMessage(transaction);
   
@@ -121,39 +122,37 @@ export async function showTransactionNotification(transaction: TransactionData) 
         companyId: transaction.company_id
       }
     },
-    trigger: null, // Mostra imediatamente
+    trigger: null,
   });
 }
 
-// Busca notificações do backend
 export async function fetchNotificationsFromBackend(companyId: number): Promise<TransactionData[]> {
   try {
     console.log(`Buscando notificações para companyId: ${companyId}`);
     const response = await axios.get<NotificationResponse>(
       `https://master.bellinitech.com.br/notificacoes.php?companyId=${companyId}`,
       {
-        timeout: 1000, // 10 segundos de timeout
+        timeout: 10000,
         headers: {
           'Content-Type': 'application/json',
         }
       }
     );
     
-    console.log('Resposta da API:', response.data);
+    console.log('Resposta da API de transações:', response.data);
     
     if (response.data.success) {
       return response.data.data || [];
     }
     
-    console.log('API retornou success: false');
+    console.log('API de transações retornou success: false');
     return [];
   } catch (error) {
-    console.error('Erro ao buscar notificações:', error);
+    console.error('Erro ao buscar notificações de transações:', error);
     return [];
   }
 }
 
-// Verifica e processa novas notificações
 export async function checkForNewNotifications(companyId: number) {
   try {
     console.log(`Verificando novas notificações para companyId: ${companyId}`);
@@ -165,7 +164,6 @@ export async function checkForNewNotifications(companyId: number) {
     console.log(`Última verificação: ${lastCheckedTime.toISOString()}`);
     console.log(`Total de notificações recebidas: ${notifications.length}`);
     
-    // Filtra notificações não lidas e criadas após a última verificação
     const newNotifications = notifications.filter(notification => {
       const createdAt = new Date(notification.criada_em);
       return notification.lida === 0 && createdAt > lastCheckedTime;
@@ -173,14 +171,14 @@ export async function checkForNewNotifications(companyId: number) {
     
     console.log(`Novas notificações encontradas: ${newNotifications.length}`);
     
-    // Exibe notificações para cada nova transação
     for (const notification of newNotifications) {
       console.log(`Exibindo notificação para transação ID: ${notification.id}`);
       await showTransactionNotification(notification);
     }
     
-    // Atualiza timestamp da última verificação
-    await AsyncStorage.setItem(lastCheckedKey, new Date().toISOString());
+    if (newNotifications.length > 0) {
+      await AsyncStorage.setItem(lastCheckedKey, new Date().toISOString());
+    }
     
     return newNotifications.length;
   } catch (error) {
@@ -189,7 +187,6 @@ export async function checkForNewNotifications(companyId: number) {
   }
 }
 
-// Modelos de mensagens para resumos
 const RESUMO_MODELS = {
   1: { // Criativo
     8: [
@@ -283,11 +280,10 @@ const RESUMO_MODELS = {
   }
 };
 
-// Busca dados de resumo do backend
-async function fetchSummaryData(companyId: number): Promise<number> {
+async function fetchSummaryData(companyId: number): Promise<SummaryData> {
   try {
     console.log(`Buscando dados de resumo para companyId: ${companyId}`);
-    const response = await axios.get(
+    const response = await axios.get<SummaryResponse>(
       `https://master.bellinitech.com.br/buscar_resumo.php?company_id=${companyId}`,
       {
         timeout: 10000,
@@ -299,23 +295,22 @@ async function fetchSummaryData(companyId: number): Promise<number> {
     
     console.log('Resposta da API de resumo:', response.data);
     
-    if (response.data.success) {
-      return response.data.total || 0;
+    if (response.data.success && response.data.data) {
+      return response.data.data;
     }
     
-    return 0;
+    return { quantidade_transacoes: 0, valor_total: 0 };
   } catch (error) {
     console.error('Erro ao buscar dados de resumo:', error);
-    return 0;
+    return { quantidade_transacoes: 0, valor_total: 0 };
   }
 }
 
-// Exibe notificação de resumo
 export async function showSummaryNotification(hour: 8 | 12 | 18 | 23, companyId: number, model: 1 | 2 | 3 = 1) {
   try {
     console.log(`Exibindo notificação de resumo para ${hour}h, companyId: ${companyId}, modelo: ${model}`);
-    const totalValue = await fetchSummaryData(companyId);
-    const formattedValue = formatCurrency(totalValue);
+    const summary = await fetchSummaryData(companyId);
+    const formattedValue = formatCurrency(summary.valor_total);
     
     const messages = RESUMO_MODELS[model][hour];
     const randomMessage = messages[Math.floor(Math.random() * messages.length)];
@@ -330,7 +325,9 @@ export async function showSummaryNotification(hour: 8 | 12 | 18 | 23, companyId:
           type: 'summary',
           hour,
           companyId,
-          model
+          model,
+          quantidade_transacoes: summary.quantidade_transacoes,
+          valor_total: summary.valor_total
         }
       },
       trigger: null,
@@ -342,7 +339,6 @@ export async function showSummaryNotification(hour: 8 | 12 | 18 | 23, companyId:
   }
 }
 
-// Agenda notificações de resumo baseadas na configuração
 export async function scheduleSummaryNotifications(companyId: number, config: {
   resumo_8: boolean;
   resumo_12: boolean;
@@ -353,7 +349,6 @@ export async function scheduleSummaryNotifications(companyId: number, config: {
   try {
     console.log('Agendando notificações de resumo:', config);
     
-    // Cancela notificações agendadas anteriormente
     await Notifications.cancelAllScheduledNotificationsAsync();
     
     const scheduleHour = async (hour: 8 | 12 | 18 | 23, enabled: boolean) => {
@@ -376,7 +371,7 @@ export async function scheduleSummaryNotifications(companyId: number, config: {
         trigger: {
           hour,
           minute: 0,
-          repeats: true,
+          repeats: true, // Notificação diária
         },
       });
       
@@ -394,7 +389,6 @@ export async function scheduleSummaryNotifications(companyId: number, config: {
   }
 }
 
-// Define a tarefa de background
 TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }) => {
   if (error) {
     console.error('Erro na tarefa de background:', error);
@@ -415,26 +409,16 @@ TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }) => 
   }
 });
 
-// Inicia monitoramento de notificações em segundo plano
 export async function startNotificationMonitoring(companyId: number) {
   try {
     console.log(`Iniciando monitoramento para companyId: ${companyId}`);
     await AsyncStorage.setItem('monitoringCompanyId', String(companyId));
     
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_NOTIFICATION_TASK);
-    if (!isRegistered) {
-      await TaskManager.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK, {
-        minimumInterval: 2, // 2 segundos para testes
-      });
-      console.log('Tarefa de background registrada com sucesso');
-    } else {
-      console.log('Tarefa de background já estava registrada');
-    }
+    // Removido TaskManager.registerTaskAsync daqui, será feito no _layout.tsx
     
-    // Inicia um intervalo para verificar notificações enquanto o app está ativo
     const intervalId = setInterval(async () => {
       await checkForNewNotifications(companyId);
-    }, 2000); // 2 segundos
+    }, 2000);
     
     await AsyncStorage.setItem('notificationIntervalId', String(intervalId));
     
@@ -444,12 +428,10 @@ export async function startNotificationMonitoring(companyId: number) {
   }
 }
 
-// Para monitoramento de notificações em segundo plano
 export async function stopNotificationMonitoring() {
   try {
     console.log('Parando monitoramento de notificações');
     
-    // Para o intervalo ativo
     const intervalIdStr = await AsyncStorage.getItem('notificationIntervalId');
     if (intervalIdStr) {
       clearInterval(Number(intervalIdStr));
@@ -457,12 +439,7 @@ export async function stopNotificationMonitoring() {
       console.log('Intervalo de notificações parado');
     }
     
-    // Desregistra a tarefa de background
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_NOTIFICATION_TASK);
-    if (isRegistered) {
-      await TaskManager.unregisterTaskAsync(BACKGROUND_NOTIFICATION_TASK);
-      console.log('Tarefa de background desregistrada');
-    }
+    // Removido TaskManager.unregisterTaskAsync daqui, será feito no _layout.tsx
     
     await AsyncStorage.removeItem('monitoringCompanyId');
     console.log('Monitoramento de background parado');
@@ -470,4 +447,5 @@ export async function stopNotificationMonitoring() {
     console.error('Erro ao parar monitoramento:', error);
   }
 }
+
 

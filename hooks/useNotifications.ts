@@ -9,7 +9,7 @@ import {
   startNotificationMonitoring,
   stopNotificationMonitoring,
   showSummaryNotification,
-  fetchNotificationsFromBackend // Adicionado para depuração
+  fetchNotificationsFromBackend
 } from '@/services/notificationService';
 
 interface NotificationConfig {
@@ -48,7 +48,7 @@ export function useNotifications() {
         setHasPermission(permission);
         setIsInitialized(true);
       } catch (error) {
-        console.error('Erro ao inicializar notificações:', error);
+        console.error("Erro ao inicializar notificações:", error);
       }
     };
 
@@ -60,28 +60,28 @@ export function useNotifications() {
     if (!isInitialized) return;
 
     const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notificação recebida:', notification);
+      console.log("Notificação recebida:", notification);
       
       // Se for uma notificação de resumo agendada, executa a lógica
-      if (notification.request.content.data?.type === 'summary_trigger') {
+      if (notification.request.content.data?.type === "summary_trigger") {
         const { hour, companyId, model } = notification.request.content.data;
         // Garante que companyId e model são válidos antes de chamar
         if (companyId && model) {
           showSummaryNotification(hour, Number(companyId), Number(model));
         } else {
-          console.warn('Dados insuficientes para showSummaryNotification:', notification.request.content.data);
+          console.warn("Dados insuficientes para showSummaryNotification:", notification.request.content.data);
         }
       }
     });
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Resposta da notificação:', response);
+      console.log("Resposta da notificação:", response);
       
       // Aqui você pode implementar navegação baseada no tipo de notificação
       const data = response.notification.request.content.data;
-      if (data?.type === 'transaction') {
+      if (data?.type === "transaction") {
         // Navegar para tela de transações ou detalhes
-        console.log('Navegar para transação:', data.transactionId);
+        console.log("Navegar para transação:", data.transactionId);
       }
     });
 
@@ -115,14 +115,14 @@ export function useNotifications() {
   // Função para configurar notificações de resumo
   const configureSummaryNotifications = async (config: NotificationConfig) => {
     if (!user?.empresaId || !hasPermission) {
-      throw new Error('Usuário não logado ou sem permissão para notificações');
+      throw new Error("Usuário não logado ou sem permissão para notificações");
     }
 
     try {
       await scheduleSummaryNotifications(user.empresaId, config);
       return true;
     } catch (error) {
-      console.error('Erro ao configurar notificações de resumo:', error);
+      console.error("Erro ao configurar notificações de resumo:", error);
       throw error;
     }
   };
@@ -136,7 +136,7 @@ export function useNotifications() {
     try {
       return await checkForNewNotifications(user.empresaId);
     } catch (error) {
-      console.error('Erro ao verificar novas notificações:', error);
+      console.error("Erro ao verificar novas notificações:", error);
       return 0;
     }
   };
@@ -148,7 +148,7 @@ export function useNotifications() {
       setHasPermission(permission);
       return permission;
     } catch (error) {
-      console.error('Erro ao solicitar permissões:', error);
+      console.error("Erro ao solicitar permissões:", error);
       return false;
     }
   };
@@ -156,7 +156,7 @@ export function useNotifications() {
   // Busca notificações do backend (mantendo compatibilidade)
   const fetchNotifications = async () => {
     if (!user?.empresaId) {
-      setError('Company ID não disponível');
+      setError("Company ID não disponível");
       setLoading(false);
       return;
     }
@@ -173,8 +173,8 @@ export function useNotifications() {
       
       return fetchedNotifications;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
-      console.error('Erro ao buscar notificações:', err);
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+      console.error("Erro ao buscar notificações:", err);
       return [];
     } finally {
       setLoading(false);
